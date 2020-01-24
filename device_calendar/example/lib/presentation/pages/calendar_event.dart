@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../date_time_picker.dart';
+import '../recurring_event_dialog.dart';
 import 'event_reminders.dart';
 
 enum RecurrenceRuleEndType { Indefinite, MaxOccurrences, SpecifiedEndDate }
@@ -13,11 +14,14 @@ class CalendarEventPage extends StatefulWidget {
   final Calendar _calendar;
   final Event _event;
 
-  CalendarEventPage(this._calendar, [this._event]);
+  final VoidCallback _onLoadingStarted;
+  final Function(bool) _onDeleteFinished;
+
+  CalendarEventPage(this._calendar, [this._event, this._onLoadingStarted, this._onDeleteFinished]);
 
   @override
   _CalendarEventPageState createState() {
-    return _CalendarEventPageState(_calendar, _event);
+    return _CalendarEventPageState(_calendar, _event, _onLoadingStarted, _onDeleteFinished);
   }
 }
 
@@ -28,6 +32,9 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
 
   Event _event;
   DeviceCalendarPlugin _deviceCalendarPlugin;
+
+  VoidCallback _onLoadingStarted;
+  Function(bool) _onDeleteFinished;
 
   DateTime _startDate;
   TimeOfDay _startTime;
@@ -54,7 +61,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
   List<Attendee> _attendees = List<Attendee>();
   List<Reminder> _reminders = List<Reminder>();
   
-  _CalendarEventPageState(this._calendar, this._event) {
+  _CalendarEventPageState(this._calendar, this._event, this._onLoadingStarted, this._onDeleteFinished) {
     _deviceCalendarPlugin = DeviceCalendarPlugin();
 
     _attendees = List<Attendee>();
@@ -568,33 +575,36 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
               ),
             ),
             if (_event.eventId?.isNotEmpty ?? false) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: <Widget>[
-                  RaisedButton(
-                    key: Key('deleteEventButton'),
-                    textColor: Colors.white,
-                    color: Colors.red,
-                    child: Text(_isRecurringEvent ? 'Delete All' : 'Delete'),
-                    onPressed: () async {
-                      await _deviceCalendarPlugin.deleteEvent(_calendar.id, _event.eventId);
-                      Navigator.pop(context, true);
-                    },
-                  ),
-                  if (_isRecurringEvent) ...[
-                    RaisedButton(
-                      key: Key('deleteInstnaceEventButton'),
-                      textColor: Colors.white,
-                      color: Colors.red,
-                      child: Text('Delete Instance'),
-                      onPressed: () async {
-                        await _deviceCalendarPlugin.deleteEventInstance(_calendar.id, _event.eventId, _event.start.millisecondsSinceEpoch, _event.end.millisecondsSinceEpoch);
-                        Navigator.pop(context, true);
-                      },
-                    ),
-                  ]
-                ]
-              )
+              RaisedButton(
+                key: Key('deleteEventButton'),
+                textColor: Colors.white,
+                color: Colors.red,
+                child: Text('Delete'),
+                onPressed: () async {
+                  var result = true;
+                  if (!_isRecurringEvent) {
+                    await _deviceCalendarPlugin.deleteEvent(_calendar.id, _event.eventId);
+                  }
+                  else {
+                    result = await showDialog<bool>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (BuildContext context) {
+                        return RecurringEventDialog(
+                          _deviceCalendarPlugin,
+                          _event,
+                          _onLoadingStarted,
+                          _onDeleteFinished,
+                        );
+                      }
+                    );
+                  }
+
+                  if (result) {
+                    Navigator.pop(context, true);
+                  }
+                },
+              ),
             ]
           ],
         ),
